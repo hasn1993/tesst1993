@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خريطة OpenStreetMap مع Nominatim ومسار الرحلة</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 50vh; /* ارتفاع الخريطة */
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        .fields {
+            margin: 20px;
+        }
+        .fields label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .fields input {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        .route-info {
+            margin: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        /* تنسيق تعليمات المستخدم */
+        .instruction {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: yellow;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid black;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <!-- تعليمات المستخدم -->
+    <div class="instruction">
+        انقر على الخريطة لتحديد وجهتك، وستظهر المسافة والوقت المتوقع.
+    </div>
+    
+    <div id="map"></div>
+    <div class="fields">
+        <h2>الموقع الحالي (افتراضي)</h2>
+        <label>البلاد</label><input type="text" id="currentCountry" value="ليبيا">
+        <label>المدينة</label><input type="text" id="currentCity" value="طرابلس">
+        <label>المنطقة</label><input type="text" id="currentRegion" value="النوفليين">
+        <label>خط العرض</label><input type="text" id="currentLat" value="32.8872">
+        <label>خط الطول</label><input type="text" id="currentLon" value="13.1910">
+        
+        <h2>الوجهة</h2>
+        <label>البلاد</label><input type="text" id="destinationCountry">
+        <label>المدينة</label><input type="text" id="destinationCity">
+        <label>المنطقة</label><input type="text" id="destinationRegion">
+        <label>خط العرض</label><input type="text" id="destinationLat">
+        <label>خط الطول</label><input type="text" id="destinationLon">
+    </div>
+
+    <div class="route-info">
+        <p id="routeDetails">المسافة: --، الوقت المتوقع: --</p>
+        <p id="streetNames">أسماء الشوارع: --</p>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <script>
+        // إعداد الخريطة
+        const map = L.map('map').setView([32.8872, 13.1910], 12); // موقع افتراضي
+
+        // إضافة طبقة الخريطة
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let markerCurrent, markerDestination;
+        let routingControl;
+
+        // إضافة مؤشر للموقع الحالي (باللون الأخضر) مع "popup"
+        markerCurrent = L.marker([32.8872, 13.1910], {icon: L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // رمز أخضر
+            iconSize: [25, 41],
+            iconAnchor: [12, 41]
+        })}).addTo(map)
+          .bindPopup('موقعك الحالي: طرابلس, النوفليين').openPopup();
+
+        // تحديد الوجهة عند النقر على الخريطة
+        map.on('click', function(e) {
+            placeMarker(e.latlng);
+            fetchLocationData(e.latlng);
+            showRoute(e.latlng); // عرض المسار تلقائيًا
+        });
+
+        function placeMarker(location) {
+            if (markerDestination) {
+                map.removeLayer(markerDestination); // إزالة المؤشر السابق للوجهة
+            }
+
+            // إضافة مؤشر الوجهة باللون الأحمر مع "popup"
+            markerDestination = L.marker(location, {icon: L.icon({
+                iconUrl: 'https://cdn-icons-png.flaticon.com/512/148/148859.png', // رمز أحمر
+                iconSize: [25, 41],
+                iconAnchor: [12, 41]
+            })}).addTo(map)
+              .bindPopup('الوجهة المحددة').openPopup();
+
+            // تحديث خطوط العرض والطول للوجهة
+            document.getElementById('destinationLat').value = location.lat;
+            document.getElementById('destinationLon').value = location.lng;
+        }
+
+        // جلب بيانات الموقع باستخدام Nominatim
+        function fetchLocationData(latlng) {
+            const url = `https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat}&lon=${latlng.lng}&format=json&addressdetails=1`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.address) {
+                        // تحديث الحقول بالبيانات المسترجعة
+                        document.getElementById('destinationCountry').value = data.address.country || '';
+                        document.getElementById('destinationCity').value = data.address.city || data.address.town || data.address.village || '';
+                        document.getElementById('destinationRegion').value = data.address.suburb || data.address.neighbourhood || data.address.road || 'غير متوفر';
+                    } else {
+                        alert('لم يتم العثور على بيانات للموقع المحدد.');
+                    }
+                })
+                .catch(error => {
+                    console.error('حدث خطأ أثناء جلب البيانات:', error);
+                });
+        }
+
+        // عرض المسار بين الموقع الحالي والوجهة
+        function showRoute(destinationLatlng) {
+            const currentLat = document.getElementById('currentLat').value;
+            const currentLon = document.getElementById('currentLon').value;
+
+            if (routingControl) {
+                map.removeControl(routingControl); // إزالة المسار السابق
+            }
+
+            routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(currentLat, currentLon), // الموقع الحالي
+                    L.latLng(destinationLatlng.lat, destinationLatlng.lng) // الوجهة
+                ],
+                routeWhileDragging: true,
+                showAlternatives: true,
+                createMarker: function() { return null; }, // إزالة المؤشرات الافتراضية
+                lineOptions: {
+                    styles: [{ color: 'green', weight: 4 }] // تلوين المسار بالأخضر
+                }
+            }).addTo(map);
+
+            routingControl.on('routesfound', function(e) {
+                const routes = e.routes;
+                const summary = routes[0].summary; // الوصول إلى المسار الأول
+
+                // حساب المسافة والوقت
+                const distance = (summary.totalDistance / 1000).toFixed(2); // تحويل إلى كيلومترات
+                const time = (summary.totalTime / 60).toFixed(2); // تحويل إلى دقائق
+
+                // تحديث المعلومات في الـ <div>
+                document.getElementById('routeDetails').innerText = `المسافة: ${distance} كم، الوقت المتوقع: ${time} دقيقة`;
+
+                // استخراج أسماء الشوارع
+                const streetNames = routes[0].instructions
+                    .map(instruction => instruction.road || 'غير معروف')
+                    .filter((value, index, self) => value && self.indexOf(value) === index)
+                    .slice(0, 5) // عرض أول 5 شوارع فقط
+                    .reverse(); // عرض الشوارع بالعكس
+
+                // عرض أسماء الشوارع
+                document.getElementById('streetNames').innerText = `أسماء الشوارع: ${streetNames.join(', ')}`;
+            });
+        }
+    </script>
+</body>
+</html>
