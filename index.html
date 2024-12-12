@@ -3,108 +3,296 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نسخ النص وتحديد الموقع</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <title>خريطة OpenStreetMap مع النقاط</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
     <style>
+        /* تصميم الصفحة */
         body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            direction: rtl;
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh;
+            box-sizing: border-box;
+            position: relative;
         }
+
+        /* تصميم الخريطة */
+        #map {
+            width: 60%;
+            height: 500px;
+            border-radius: 15px;
+            box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.1);
+            background-color: #eaeaea;
+            z-index: 1;
+        }
+
+        /* تصميم لوحة التحكم */
+        #controls {
+            width: 35%;
+            background-color: #ffffff;
+            padding: 25px;
+            margin-left: 5%;
+            border-radius: 15px;
+            box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.1);
+            background: linear-gradient(to right, #f5f7fa, #c3cfe2);
+            z-index: 2;
+            position: relative;
+        }
+
+        /* تصميم العنوان */
+        h3 {
+            text-align: center;
+            font-size: 26px;
+            margin-bottom: 20px;
+            color: #4a90e2;
+        }
+
+        /* تصميم حقول الإدخال */
+        label {
+            font-size: 16px;
+            color: #444;
+            margin-bottom: 5px;
+            display: block;
+        }
+
         input {
-            width: 80%;
-            padding: 10px;
-            margin-right: 10px;
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
         }
-        button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
+
+        /* تأثير التركيز على الحقول */
+        input:focus {
+            border-color: #66afe9;
+            box-shadow: 0 0 5px rgba(102, 175, 233, 0.5);
+            outline: none;
+            background-color: #ffffff;
+        }
+
+        /* تصميم الزر */
+        .btn {
+            background-color: #4a90e2;
             color: white;
             border: none;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 8px;
             cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s ease;
         }
-        button:hover {
-            background-color: #45a049;
+
+        .btn:hover {
+            background-color: #357ab7;
         }
-        #message {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-            display: none; /* مخفي بشكل افتراضي */
+
+        /* تخطيط لوحة التحكم */
+        #controls .row {
+            margin-bottom: 15px;
         }
-        #map {
-            height: 400px;
-            margin-top: 20px;
+
+        /* جعل لوحة التحكم متجاوبة */
+        @media (max-width: 768px) {
+            #map {
+                width: 100%;
+                margin-bottom: 20px;
+            }
+
+            #controls {
+                width: 100%;
+                margin-left: 0;
+            }
         }
+
+        /* تصميم التنبيه */
+        .alert {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 9999;
+            font-size: 16px;
+            display: none; /* إخفاء التنبيه افتراضيًا */
+        }
+
+        /* تصميم التنبيه عند ظهوره */
+        .alert.show {
+            display: block;
+        }
+
     </style>
 </head>
 <body>
 
-    <h2>نسخ النص إلى الحافظة</h2>
-    
-    <!-- حقل إدخال النص -->
-    <input type="text" id="myInput" value="أدخل النص هنا">
-    
-    <!-- زر النسخ -->
-    <button onclick="copyText()">نسخ النص</button>
+<div id="map"></div>
 
-    <!-- مكان لعرض الرسالة -->
-    <div id="message">تم نسخ النص بنجاح!</div>
+<div id="controls">
+    <h3>أدخل النقاط</h3>
+    <label for="currentLocation">موقعك الحالي:</label>
+    <input type="text" id="currentLocation" placeholder="يتم تحديد الموقع تلقائيًا" readonly>
+    <br>
+    <label for="startPoint">نقطة البداية:</label>
+    <input type="text" id="startPoint" placeholder="انقر لتحديد نقطة البداية" readonly>
+    <br>
+    <label for="destinationPoint">نقطة الوجهة:</label>
+    <input type="text" id="destinationPoint" placeholder="انقر على الخريطة لتحديد الوجهة" readonly>
+    <br>
+    <label for="distance">المسافة:</label>
+    <input type="text" id="distance" placeholder="المسافة (كم)" readonly>
+    <br>
+    <label for="duration">المدة:</label>
+    <input type="text" id="duration" placeholder="المدة (دقائق)" readonly>
+    <br>
+    <button class="btn" id="clearRoute">مسح المسار</button>
+</div>
 
-    <!-- خريطة OpenStreetMap -->
-    <div id="map"></div>
+<!-- التنبيه -->
+<div class="alert" id="alertMessage"></div>
 
-    <!-- زر تحديد الموقع -->
-    <button onclick="getLocation()">تحديد موقعي على الخريطة</button>
+<script>
+    const map = L.map('map').setView([32.8872, 13.1910], 13); // الافتراضي إلى طرابلس
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
-        // إعداد الخريطة
-        var map = L.map('map').setView([51.505, -0.09], 13);  // الإحداثيات الأولية لموقع الخريطة (لندن كمثال)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
 
-        // إضافة طبقة OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
+    let startMarker = null;
+    let destinationMarker = null;
+    let startCoordinates = null;
+    let destinationCoordinates = null;
+    let routeControl = null;
 
-        // إضافة Marker فارغ لموقع المستخدم
-        var marker = L.marker([51.505, -0.09]).addTo(map);
+    let selectingStart = false;
 
-        // وظيفة نسخ النص إلى الحافظة
-        function copyText() {
-            var copyText = document.getElementById("myInput");
-            copyText.select();
-            copyText.setSelectionRange(0, 99999); // لدعم الأجهزة المحمولة
-            document.execCommand("copy");
+    // دالة لعرض التنبيه
+    function showAlert(message) {
+        const alertElement = document.getElementById('alertMessage');
+        alertElement.textContent = message;
+        alertElement.classList.add('show');
+        setTimeout(() => {
+            alertElement.classList.remove('show');
+        }, 4000);
+    }
 
-            var message = document.getElementById("message");
-            message.style.display = "block";  // عرض الرسالة
-            setTimeout(function() {
-                message.style.display = "none";
-            }, 3000);
+    // دالة لتحديث المسار
+    function updateRoute() {
+        if (startCoordinates && destinationCoordinates) {
+            if (routeControl) map.removeControl(routeControl);
+
+            routeControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(startCoordinates[0], startCoordinates[1]),
+                    L.latLng(destinationCoordinates[0], destinationCoordinates[1])
+                ],
+                routeWhileDragging: true,
+                createMarker: () => null,
+                show: false,
+                addWaypoints: false
+            }).on('routesfound', (e) => {
+                const routes = e.routes;
+                const distance = routes[0].summary.totalDistance / 1000;
+                const duration = routes[0].summary.totalTime / 60;
+
+                document.getElementById('distance').value = distance.toFixed(2) + ' كم';
+                document.getElementById('duration').value = duration.toFixed(2) + ' دقيقة';
+
+                const routeContainer = document.querySelector('.leaflet-routing-container');
+                if (routeContainer) routeContainer.style.display = 'none';
+            }).addTo(map);
         }
+    }
 
-        // وظيفة لتحديد الموقع الجغرافي للمستخدم
-        function getLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
-                    var lat = position.coords.latitude;
-                    var lon = position.coords.longitude;
+    // الحصول على الموقع الحالي باستخدام GPS
+    function setCurrentLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
 
-                    // تحريك الخريطة إلى موقع المستخدم
-                    map.setView(new L.LatLng(lat, lon), 13);
-                    marker.setLatLng([lat, lon]);  // تحديث مكان الـ Marker
+                // عرض الموقع الحالي في الحقل
+                document.getElementById('currentLocation').value = `Lat: ${lat}, Lng: ${lng}`;
 
-                    // عرض رسالة للمستخدم
-                    alert("تم تحديد موقعك: " + lat + ", " + lon);
-                });
-            } else {
-                alert("التحديد الجغرافي غير مدعوم في متصفحك.");
-            }
+                // تعيين الموقع الحالي على الخريطة
+                map.setView([lat, lng], 13);
+            }, function(error) {
+                console.log(error);
+                showAlert('فشل في تحديد الموقع الحالي');
+            });
+        } else {
+            showAlert('متصفحك لا يدعم خدمة GPS');
         }
-    </script>
+    }
+
+    // استدعاء دالة تحديد الموقع عند تحميل الصفحة
+    window.onload = setCurrentLocation;
+
+    // عند النقر على الخريطة لاختيار نقطة البداية والوجهة
+    map.on('click', (e) => {
+        if (!startCoordinates) {
+            const { lat, lng } = e.latlng;
+            if (startMarker) map.removeLayer(startMarker);
+            startMarker = L.marker([lat, lng], { draggable: true }).addTo(map).bindPopup('نقطة البداية').openPopup();
+            startCoordinates = [lat, lng];
+            document.getElementById('startPoint').value = `${lat}, ${lng}`;
+
+            startMarker.on('dragend', () => {
+                const position = startMarker.getLatLng();
+                startCoordinates = [position.lat, position.lng];
+                document.getElementById('startPoint').value = `${position.lat}, ${position.lng}`;
+                updateRoute();
+            });
+        } else {
+            const { lat, lng } = e.latlng;
+            if (destinationMarker) map.removeLayer(destinationMarker);
+            destinationMarker = L.marker([lat, lng], { draggable: true }).addTo(map).bindPopup('نقطة الوجهة').openPopup();
+            destinationCoordinates = [lat, lng];
+            document.getElementById('destinationPoint').value = `${lat}, ${lng}`;
+
+            destinationMarker.on('dragend', () => {
+                const position = destinationMarker.getLatLng();
+                destinationCoordinates = [position.lat, position.lng];
+                document.getElementById('destinationPoint').value = `${position.lat}, ${position.lng}`;
+                updateRoute();
+            });
+
+            updateRoute();
+        }
+    });
+
+    // عند الضغط على مسح المسار
+    document.getElementById('clearRoute').addEventListener('click', () => {
+        document.getElementById('startPoint').value = '';
+        document.getElementById('destinationPoint').value = '';
+        document.getElementById('distance').value = '';
+        document.getElementById('duration').value = '';
+
+        if (startMarker) map.removeLayer(startMarker);
+        if (destinationMarker) map.removeLayer(destinationMarker);
+        if (routeControl) map.removeControl(routeControl);
+
+        startCoordinates = null;
+        destinationCoordinates = null;
+
+        showAlert('تم مسح المسار. يمكنك الآن تحديد نقطة البداية والوجهة من جديد.');
+    });
+
+</script>
 
 </body>
 </html>
